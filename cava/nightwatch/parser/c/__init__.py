@@ -104,6 +104,10 @@ def parse(filename: str, include_path, definitions, extra_args):
             our_annotations.update(
                 allocates_resources=allocates_resources,
                 deallocates_resources=deallocates_resources)
+            our_annotations.update(
+                nontransferrable=nontransferrable_type(tpe),
+                is_const=tpe.is_const_qualified(),
+            )
 
             if annotations["type_cast"]:
                 new_type = annotations["type_cast"]

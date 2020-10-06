@@ -1,7 +1,7 @@
 from collections import namedtuple
 import re
 from copy import copy
-from typing import List, Set, Iterator, Collection, Optional, Union, Mapping
+from typing import List, Set, Iterator, Collection, Optional, Union, Mapping, Any
 
 from toposort import toposort_flatten, CircularDependencyError
 
@@ -11,7 +11,7 @@ from nightwatch.c_dsl import Expr, ExprOrStr
 from .indent import indent_c
 from .parser import parse_assert, parse_requires, parse_expects
 
-_annotation_prefix = "ava_"
+_annotation_prefix = ""
 ASCRIBE_TYPES = False
 
 
@@ -83,6 +83,8 @@ class Type(object):
     lifetime_coupled: Optional[ExprOrStr]
     buffer_allocator: ExprOrStr
     buffer_deallocator: ExprOrStr
+    nontransferrable: bool
+    is_const: bool
 
     def __init__(self, spelling, **annotations):
         self.fields = {}
@@ -156,13 +158,13 @@ class Type(object):
                 pass
             elif name == "pointee":
                 anns = self.pointee.annotations
-                if self.transfer not in ("NW_HANDLE", "NW_OPAQUE") and anns:
-                    late_annotations += f"{_annotation_prefix}element {{ {anns} }}\n"
+                # if self.transfer not in ("NW_HANDLE", "NW_OPAQUE") and anns:
+                late_annotations += f"{_annotation_prefix}element {{ {anns} }}\n"
             elif name == "fields":
                 for fname, field in self.fields.items():
                     anns = field.annotations
-                    if anns:
-                        late_annotations += f"{_annotation_prefix}field({fname}) {{ {anns} }}\n"
+                    # if anns:
+                    late_annotations += f"{_annotation_prefix}field({fname}) {{ {anns} }}\n"
             elif name == "transfer" and value in self.transfer_spellings and value != default_annotations.get(name):
                 if value in ("NW_CALLBACK", "NW_CALLBACK_REGISTRATION"):
                     annotations += f"{_annotation_prefix}{self.transfer_spellings[value]}({self.callback_stub_function});\n"
@@ -312,6 +314,9 @@ class Argument(object):
                       f"ava_output (and it was not guessed). If you want no copies "
                       f"at all, provide ava_no_copy.")
 
+    @property
+    def descriptor_arguments(self):
+        return (self.name,)
 
     @property
     def contained_types(self) -> Set[Type]:
@@ -335,8 +340,8 @@ class Argument(object):
         for name, value in self.__dict__.items():
             if name in self.hidden_annotations:
                 pass
-            elif name == "type":
-                pass # Handled below
+            # elif name == "type":
+            #     pass # Handled below
             elif name == "depends_on" and value:
                 annotations += f"{_annotation_prefix}{name}({', '.join(value)});\n"
             elif not name.startswith("_") and value != default_annotations.get(name):
@@ -405,6 +410,10 @@ class Function(object):
                      "All argument names much be different.")
 
     @property
+    def descriptor_arguments(self):
+        return (self.name,)
+
+    @property
     def real_arguments(self) -> Iterator[Argument]:
         return (a for a in self._original_arguments if not a.implicit_argument)
 
@@ -462,7 +471,7 @@ class Function(object):
         "NW_FLUSH": "flush",
     }
 
-    hidden_annotations = {"api", "location", "name", "return_value", "epilogue", "prologue", "arguments", "type"}
+    hidden_annotations = {"api", "location", "name", "return_value", "epilogue", "prologue", "arguments"}
 
     def __str__(self):
         annotations = ""
@@ -507,6 +516,8 @@ class Function(object):
 # API
 
 class API(object):
+    functions: List[Function]
+
     def __init__(self, name, version, identifier, number, includes: Collection[str],
                  functions, c_types_header_code="", c_utility_code="",
                  metadata_type=None, export_qualifier="", cplusplus=False,

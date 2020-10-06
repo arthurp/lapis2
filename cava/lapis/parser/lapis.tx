@@ -1,0 +1,111 @@
+// Starting rule
+Specification: declarations*=TopLevel;
+
+TopLevel: Rule | Descriptor;
+
+DescriptorBlock: DescriptorSequence | DescriptorBlockStatement;
+DescriptorSequence: '{'- children*=DescriptorBlockStatement '}'-;
+ArgumentList: '('- arguments*=Value[','] ')'-;
+Descriptor: descriptor=Id (argument_list=ArgumentList)? (block=DescriptorBlockOrCode ';'? | ';');
+DescriptorBlockOrCode: DescriptorBlock | Code;
+
+DescriptorBlockStatement: Descriptor | ConditionalDescriptor;
+
+ConditionalDescriptor: 'if' '(' predicate=Code ')' thn=DescriptorBlock ('else' els=DescriptorBlock)?;
+
+Value: String | Code | Id | Number;
+
+String: value=STRING;
+
+Keyword:
+    'if' | '_' | '@' | '`' | '```'
+;
+
+Number: value=INT;
+
+QuotedId[noskipws]: /\s*/- '`'- /[^`]*/ '`'- /\s*/-;
+BareOrQuotedId: (!Keyword ID) | QuotedId;
+Id: id=BareOrQuotedId;
+
+QuotedCodeSegmentInterpolate[noskipws]: '$' '{' variable=Id '}';
+QuotedCodeSegmentDollar[noskipws]: '$'- '$';
+QuotedCodeSegmentBacktick[noskipws]: !'```' '`';
+QuotedCodeSegmentLiteral[noskipws]: /[^`$]/+;
+QuotedCodeSegment: QuotedCodeSegmentInterpolate | QuotedCodeSegmentDollar | QuotedCodeSegmentBacktick | QuotedCodeSegmentLiteral;
+Code: /\s*/- '```'- segments*=QuotedCodeSegment '```'- /\s*/-;
+
+MatchBlock: '{'- (bind=Bind)? children*=MatchDescriptor '}'-;
+
+MatchArgumentList: '('- arguments*=Match[','] ')'-;
+MatchDescriptor: descriptor=Id (argument_list=MatchArgumentList)? (block=MatchBlock ';'? | ';');
+    
+Match: MatcherBind | MatcherString | MatcherPredicate | MatcherValue | MatcherAny;
+
+MatcherBind: bind=Bind child=Match;
+QuotedRegex[noskipws]: /\s*/- '/'- /[^\/]*/ '/'- /\s*/-;
+MatcherString: regex=QuotedRegex;
+MatcherPredicate: predicate=ID '(' arguments*=Match[','] ')';
+MatcherValue: value=Value;
+MatcherAny: value='_';
+
+Bind: ID '@'-;
+
+Rule: 'rule' match=MatchBlock '=>' ('if' '(' predicate=Code ')')? result=DescriptorBlock;
+
+
+Comment:
+  /\/\/.*$/ |
+  BlockComment
+;
+
+BlockComment: '/*' (!'*/' /./)* '*/';
+
+    /*
+// C Declarations
+
+Declaration: specifiers+=DeclarationSpecifier declarators*=InitDeclarator[','] ';';
+    
+DeclarationSpecifier: StorageClassSpecifier | TypeSpecifier | TypeQualifier | FunctionSpecifier | AlignmentSpecifier;
+
+InitDeclarator: Declarator
+    // XXX: Handle initializer
+;    
+
+StorageClassSpecifier: 'typedef' | 'extern' | 'static' | '_Thread_local' | 'auto' | 'register';
+TypeSpecifier: 'void' | 'char' | 'short' | 'int' | 'long' | 'float' | 'double' | 'signed' | 'unsigned' | '_Bool' | '_Complex' | AtomicTypeSpecifier | StructOrUnionSpecifier
+    // XXX: | EnumSpecifier | TypedefName
+;
+StructOrUnionSpecifier: StructOrUnion (tag=CIdentifier)? '{' declarations*=StructDeclaration '}';
+StructOrUnion: 'struct' | 'union';
+StructDeclaration: specifiers_and_qualifiers*=TypeSpecifierOrQualifier declarators*=StructDeclarator[','] ';';
+TypeSpecifierOrQualifier: TypeSpecifier | TypeQualifier;
+    StructDeclarator: (declarator=Declarator)?
+    // XXX: Handle bit fields (':' field_width=ConstantExpression)?
+;
+
+
+AtomicTypeSpecifier: '_Atomic' '(' type=TypeName ')';
+TypeQualifier: 'const' | 'restrict' | 'volatile' | '_Atomic';
+FunctionSpecifier: 'inline' | '_Noreturn';
+AlignmentSpecifier: '_Alignas' '(' type=TypeName ')'
+    // XXX: Handle numeric align
+;
+    
+Declarator: pointer*=Pointer direct_declarator=DirectDeclarator;
+SimpleDirectDeclarator: CIdentifier | ('('- Declarator ')'-);    
+DirectDeclarator: DirectDeclaratorFunction
+    // XXX: Handle the complexities of array types
+    | SimpleDirectDeclarator
+    // XXX: Handle type less argument lists?
+;
+DirectDeclaratorFunction: prefix=SimpleDirectDeclarator '(' parameters*=ParameterDeclaration[','] vararg?=VarArgSuffix ')';
+VarArgSuffix: ',' '...';
+
+Pointer: '*' qualifiers*=TypeQualifier;
+    
+ParameterDeclaration: specifiers*=DeclarationSpecifier declarator=Declarator;
+
+TypeName: specifiers_and_qualifiers*=TypeSpecifierOrQualifier (Pointer)?;
+
+CIdentifier: id=ID;    
+*/

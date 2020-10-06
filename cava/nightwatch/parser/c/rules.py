@@ -83,16 +83,19 @@ class NonTransferableTypes(TypeRule):
         """
         Walk down through pointers looking for a type that is incomplete (has no size).
         """
-        def nontransferrable(ct, internal):
-            nontransferrable_type = \
-                ct.get_size() < 0 and ct.kind != TypeKind.VOID and ct.kind != TypeKind.INCOMPLETEARRAY
-            nontransferrable_struct = \
-                any(f.type.is_pointer() or nontransferrable(f.type, True) for f in ct.get_fields())
-            pointer_to_nontransferrable = \
-                not internal and ct.is_pointer() and nontransferrable(ct.get_pointee(), True)
-            return nontransferrable_type or nontransferrable_struct or pointer_to_nontransferrable
-        return nontransferrable(ct.get_canonical(), False)
+        return nontransferrable_type(ct)
 
+def nontransferrable_type(ct):
+    def nontransferrable(ct, internal):
+        nontransferrable_type = \
+            ct.get_size() < 0 and ct.kind != TypeKind.VOID and ct.kind != TypeKind.INCOMPLETEARRAY
+        nontransferrable_struct = \
+            any(f.type.is_pointer() or nontransferrable(f.type, True) for f in ct.get_fields())
+        pointer_to_nontransferrable = \
+            not internal and ct.is_pointer() and nontransferrable(ct.get_pointee(), True)
+        return nontransferrable_type or nontransferrable_struct or pointer_to_nontransferrable
+
+    return nontransferrable(ct.get_canonical(), False)
 
 # class ComputeSizes(Rule):
 #     def __init__(self):
