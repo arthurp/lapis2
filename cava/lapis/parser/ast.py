@@ -240,8 +240,9 @@ class MatcherAny(Matcher):
 # Rules
 
 class Rule(Declaration):
-    def __init__(self, parent, match, predicate, result):
+    def __init__(self, parent, match, priority, predicate, result):
         self.match = match
+        self.priority = priority or 0
         self.predicate = predicate
         self.result = simplify_block(self, result)
 
@@ -253,10 +254,13 @@ class Rule(Declaration):
             return [self.result]
 
     def __str__(self):
+        prio = ""
+        if self.priority:
+            prio = f" priority {self.priority}"
         pred = ""
         if self.predicate:
             pred = f" if({self.predicate})"
-        return f"rule {self.match} =>{pred} {self.result}"
+        return f"rule{prio} {self.match} =>{pred} {self.result}"
 
 
 # Top-level object

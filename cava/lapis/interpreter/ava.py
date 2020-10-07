@@ -168,7 +168,9 @@ class Interpreter:
             self.interpret_subdescriptor(d, m, ctx)
 
     def apply_rules(self, m):
-        for r in self.rules:
+        rules = list(self.rules)
+        rules.sort(key=lambda r: (-r.priority, self.rules.index(r)))
+        for r in rules:
             self.apply_rule(r, m)
 
     def apply_rule(self, r: ast.Rule, m):

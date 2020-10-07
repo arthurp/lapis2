@@ -53,7 +53,7 @@ MatcherAny: value='_';
 
 Bind: ID '@'-;
 
-Rule: 'rule' match=MatchBlock '=>' ('if' '(' predicate=Code ')')? result=DescriptorBlock;
+Rule: 'rule' ('priority' priority=INT)? match=MatchBlock '=>' ('if' '(' predicate=Code ')')? result=DescriptorBlock;
 
 
 Comment:
