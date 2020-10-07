@@ -1,52 +1,66 @@
-from abc import ABCMeta, abstractmethod
+from typing import Set, Dict, Any, FrozenSet, Union
 
 from nightwatch import model
 from ..parser import ast
+from ..util import frozendict
+
+__all__ = ["Interpreter"]
 
 
-def match_result(v):
+class MatchResult:
+    matches: FrozenSet[frozendict]
+
+    def __init__(self, matches: FrozenSet[Union[Dict[str, Any], frozendict]]):
+        self.matches = frozenset((d if isinstance(d, frozendict) else frozendict(d)) for d in matches)
+
+    def __mul__(self, other: "MatchResult"):
+        """
+        Extend each element of the match set with additional bindings.
+
+        This is represented using "*" because `match_failure` is the zero of this operation similar to multiplication.
+
+        :param other: Another MatchResult.
+        :return: A new MatchResult.
+        """
+        s = set()
+        for m in self.matches:
+            for n in other.matches:
+                m = dict(m)
+                m.update(n)
+                s.add(frozendict(m))
+        return MatchResult(frozenset(s))
+
+    def __or__(self, other: "MatchResult"):
+        """
+        Union two match sets.
+
+        This is represented as "|" because `match_failure` is the unit of this operation similar to set union.
+
+        :param other: Anther MatchResult
+        :return:
+        """
+        return MatchResult(self.matches | other.matches)
+
+    def __bool__(self):
+        """
+        :return: True iff we have a binding.
+        """
+        return bool(self.matches)
+
+
+def match_result(v: Union[bool, Dict[str, Any]]) -> MatchResult:
     if v is True:
-        return MatchBinding()
+        return match_success
     elif v is False:
-        return MatchFailure()
+        return match_failure
     elif isinstance(v, dict):
-        return MatchBinding(**v)
+        return MatchResult(frozenset([frozendict(v)]))
     else:
-        return match_result(bool(v))
+        raise TypeError(v)
 
 
-class MatchResult(metaclass=ABCMeta):
-    @abstractmethod
-    def __add__(self, other):
-        pass
-
-
-class MatchBinding(MatchResult):
-    def __init__(self, **bindings):
-        self.bindings = bindings
-
-    def __add__(self, other):
-        if isinstance(other, MatchBinding) or isinstance(other, dict):
-            d = {}
-            d.update(self.bindings)
-            d.update(other.bindings if isinstance(other, MatchBinding) else other)
-            return MatchBinding(**d)
-        else:
-            return other
-
-    def __bool__(self):
-        return True
-
-
-class MatchFailure(MatchResult):
-    def __init__(self):
-        pass
-
-    def __add__(self, other):
-        return self
-
-    def __bool__(self):
-        return False
+match_failure = MatchResult(frozenset())
+match_success = match_result({})
 
 
 class Interpreter:
@@ -153,10 +167,10 @@ class Interpreter:
         Apply the rule `r` to the model object `m` or a child of it.
         """
         match = self.rule_matches(r.match, m)
-        if match:
-            predicate_result = not r.predicate or eval(r.predicate.eval(match.bindings), match.bindings)
+        for binding in match.matches:
+            predicate_result = not r.predicate or eval(r.predicate.eval(binding), dict(binding))
             if predicate_result:
-                self.interpret_subdescriptors(r.result_descriptors, m, match.bindings)
+                self.interpret_subdescriptors(r.result_descriptors, m, binding)
         # Recursively descend
         if isinstance(m, model.API):
             for f in m.functions:
@@ -175,7 +189,7 @@ class Interpreter:
         else:
             raise NotImplementedError(str(m))
 
-    def rule_matches(self, match: ast.Matcher, m):
+    def rule_matches(self, match: ast.Matcher, m) -> MatchResult:
         """
         Match the matcher to the model. `a` and `m` must be exactly analogous: Both a function of the same name,
         for instance.
@@ -184,43 +198,41 @@ class Interpreter:
         :param m: An AvA model object.
         :return: Return a Match
         """
-        # XXX: This can only find ONE match. It needs to find ALL matches or have some way to find the next match.
         if isinstance(match, ast.MatchDescriptor):
-            raise ValueError(str(match))
+            # MatchDescriptor is handled in rule_matches_subdescriptor
+            raise TypeError(str(match))
         elif isinstance(match, ast.MatchBlock):
-            sub = MatchBinding()
+            result = match_success
             for d in match.children:
-                sub += self.rule_matches_subdescriptor(d, m)
+                result *= self.rule_matches_subdescriptor(d, m)
             if match.bind:
-                return sub + {match.bind: m}
+                return result * match_result({match.bind: m})
             else:
-                return sub
+                return result
         elif isinstance(match, ast.MatcherAny):
-            return MatchBinding()
+            return match_success
         elif isinstance(match, ast.MatcherBind):
-            sub = self.rule_matches(match.child, m)
-            return sub + {match.bind: m}
+            assert match.bind
+            result = self.rule_matches(match.child, m)
+            return result * match_result({match.bind: m})
         elif isinstance(match, ast.MatcherString):
-            if match.re.match(str(m)):
-                return MatchBinding()
-            else:
-                return MatchFailure()
+            return match_result(bool(match.re.match(str(m))))
         elif isinstance(match, ast.MatcherPredicate):
             if match.predicate == "pointer":
                 if isinstance(m, model.Type) and hasattr(m, "pointee") and m.pointee:
                     return self.rule_matches(match.arguments[0], m.pointee)
                 else:
-                    return MatchFailure()
+                    return match_failure
             if match.predicate == "const":
                 if isinstance(m, model.Type) and m.is_const:
                     return self.rule_matches(match.arguments[0], m)
                 else:
-                    return MatchFailure()
+                    return match_failure
             if match.predicate == "nonconst":
                 if isinstance(m, model.Type) and not m.is_const:
                     return self.rule_matches(match.arguments[0], m)
                 else:
-                    return MatchFailure()
+                    return match_failure
             elif match.predicate == "transferrable":
                 return match_result(isinstance(m, model.Type) and not m.nontransferrable)
             elif match.predicate == "not":
@@ -230,9 +242,9 @@ class Interpreter:
         elif isinstance(match, ast.MatcherValue):
             # TODO: Matching by string is probably wrong.
             if match.value.eval({}) == str(m):
-                return MatchBinding()
+                return match_success
             else:
-                return MatchFailure()
+                return match_failure
 
     # The problem rules are when you want to match, e.g., a function with a specific name.
     # This is done by matching the specification as a whole with a specific function in it.
@@ -249,52 +261,42 @@ class Interpreter:
         :return: A Match object
         """
         assert isinstance(match, ast.MatchDescriptor)
-        sub = MatchBinding()
         if match.descriptor.matches("NOT"):
             not_match = self.rule_matches(match.block, m)
             if not_match:
-                return MatchFailure()
+                return match_failure
             else:
-                return MatchBinding()
+                return match_success
         elif match.descriptor.matches("function"):
             if not isinstance(m, model.API):
-                return MatchFailure()
-            function_name = match.arguments[0]
-            for f in m.functions:
-                name_match = self.rule_matches(function_name, f.name)
-                overall_match = name_match + self.rule_matches(match.block, f)
-                if overall_match:
-                    sub += overall_match
-                    # XXX: Need to match multiple subdescriptors
-                    break
-            else:
-                return MatchFailure()
+                return match_failure
+            return self.rule_matches_subobjects(match, m.functions)
         elif match.descriptor.matches("argument"):
             if not isinstance(m, model.Function):
-                return MatchFailure()
-            arg_name = match.arguments[0]
-            for a in m.arguments:
-                name_match = self.rule_matches(arg_name, a.name)
-                overall_match = name_match + self.rule_matches(match.block, a)
-                if overall_match:
-                    sub += overall_match
-                    # XXX: Need to match multiple subdescriptors
-                    break
-            else:
-                return MatchFailure()
+                return match_failure
+            return self.rule_matches_subobjects(match, m.arguments)
         elif match.descriptor.matches("element"):
             if not isinstance(m, model.Type):
-                return MatchFailure()
-            sub += self.rule_matches(match.block, m.pointee)
+                return match_failure
+            return self.rule_matches(match.block, m.pointee)
         elif match.descriptor.matches("field"):
             if not isinstance(m, model.Type):
-                return MatchFailure()
-            field_name = match.arguments[0].name
-            sub += self.rule_matches(match.block, m.fields[field_name])
+                return match_failure
+            return self.rule_matches(match.block, m.fields[match.arguments[0].name])
         else:
             descriptor_name = match.descriptor.name
             if hasattr(m, descriptor_name) and len(match.arguments) == 1:
-                sub += self.rule_matches(match.arguments[0], getattr(m, descriptor_name))
+                return self.rule_matches(match.arguments[0], getattr(m, descriptor_name))
+            if hasattr(m, descriptor_name) and len(match.arguments) == 0:
+                return self.rule_matches(ast.match_value_true, getattr(m, descriptor_name))
             else:
-                sub = MatchFailure()
-        return sub
+                return match_failure
+
+    def rule_matches_subobjects(self, match, objects):
+        name = match.arguments[0]
+        result = match_failure
+        for f in objects:
+            name_match = self.rule_matches(name, f.name)
+            overall_match = name_match * self.rule_matches(match.block, f)
+            result |= overall_match
+        return result

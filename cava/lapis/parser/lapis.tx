@@ -13,12 +13,12 @@ DescriptorBlockStatement: Descriptor | ConditionalDescriptor;
 
 ConditionalDescriptor: 'if' '(' predicate=Code ')' thn=DescriptorBlock ('else' els=DescriptorBlock)?;
 
-Value: String | Code | Id | Number;
+Value: String | Code | Id | Number | Bool;
 
 String: value=STRING;
 
 Keyword:
-    'if' | '_' | '@' | '`' | '```'
+    'if' | '_' | '@' | '`' | '```' | 'True' | 'False'
 ;
 
 Number: value=INT;
@@ -33,6 +33,9 @@ QuotedCodeSegmentBacktick[noskipws]: !'```' '`';
 QuotedCodeSegmentLiteral[noskipws]: /[^`$]/+;
 QuotedCodeSegment: QuotedCodeSegmentInterpolate | QuotedCodeSegmentDollar | QuotedCodeSegmentBacktick | QuotedCodeSegmentLiteral;
 Code: /\s*/- '```'- segments*=QuotedCodeSegment '```'- /\s*/-;
+
+BoolValueName: 'True' | 'False';
+Bool: value=BoolValueName;
 
 MatchBlock: '{'- (bind=Bind)? children*=MatchDescriptor '}'-;
 

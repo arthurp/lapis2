@@ -12,6 +12,7 @@ classes = [
     ast.Id,
     ast.String,
     ast.Number,
+    ast.Bool,
 
     # Descriptors
     ast.DescriptorSequence,

@@ -119,6 +119,21 @@ class Number(Value):
     def __str__(self):
         return f'{self.value}'
 
+class Bool(Value):
+    def __init__(self, parent, value):
+        if value == "True":
+            self.value = True
+        elif value == "False":
+            self.value = False
+        else:
+            raise ValueError(value)
+
+    def eval(self, ctx):
+        return self.value
+
+    def __str__(self):
+        return str(self.value)
+
 class QuotedCodeSegmentInterpolate(Value):
     def __init__(self, parent, variable):
         self.variable = variable
@@ -202,6 +217,8 @@ class MatcherValue(Matcher):
 
     def __str__(self):
         return str(self.value)
+
+match_value_true = MatcherValue(None, True)
     
 class MatcherPredicate(Matcher):
     def __init__(self, parent, predicate, arguments):
