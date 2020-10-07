@@ -276,8 +276,8 @@ def parse(filename: str, include_path, definitions, extra_args):
             return_value = convert_argument(-1, cursor, annotations.subelement("return_value"),
                                             is_ret=True, type=cursor.result_type)
 
-            if "unsupported" in annotations:
-                supported = not bool(annotations["unsupported"])
+            # if "unsupported" in annotations:
+            #     supported = not bool(annotations["unsupported"])
 
             disable_native = False
             if "disable_native" in annotations:
@@ -292,7 +292,7 @@ def parse(filename: str, include_path, definitions, extra_args):
                 prologue=prologue,
                 epilogue=epilogue,
                 consumes_resources=resources,
-                supported=supported,
+                supported=True,
                 disable_native=disable_native,
                 type=convert_type(cursor.type, cursor.mangled_name, annotation_set(), set()),
                 **annotations.direct(function_annotations).flatten())
