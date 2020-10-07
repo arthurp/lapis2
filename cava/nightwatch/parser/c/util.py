@@ -93,6 +93,8 @@ type_annotations = {"transfer", "success", "name", "element", "deallocates", "al
                     "callback_stub_function", "lifetime", "lifetime_coupled"}
 argument_annotations = {"depends_on", "value", "implicit_argument", "input", "output", "no_copy", "userdata"}
 
+known_annotations = function_annotations | type_annotations | argument_annotations
+
 ignored_cursor_kinds = frozenset([CursorKind.MACRO_INSTANTIATION])
 
 LIBCLANG_INFO = "(INFO: This can be caused by using an unpatched libclang. " \

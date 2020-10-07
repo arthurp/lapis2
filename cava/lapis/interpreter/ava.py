@@ -1,6 +1,8 @@
-from typing import Set, Dict, Any, FrozenSet, Union
+from typing import Dict, Any, FrozenSet, Union
 
 from nightwatch import model
+from nightwatch.parser.c import function_annotations, type_annotations, argument_annotations, known_annotations, \
+    parse_assert, parse_requires
 from ..parser import ast
 from ..util import frozendict
 
@@ -20,7 +22,7 @@ class MatchResult:
         This is represented using "*" because `match_failure` is the zero of this operation similar to multiplication.
 
         :param other: Another MatchResult.
-        :return: A new MatchResult.
+        :return: The combined (by cross-product) set of bindings.
         """
         s = set()
         for m in self.matches:
@@ -37,13 +39,13 @@ class MatchResult:
         This is represented as "|" because `match_failure` is the unit of this operation similar to set union.
 
         :param other: Anther MatchResult
-        :return:
+        :return: The union of possible bindings.
         """
         return MatchResult(self.matches | other.matches)
 
     def __bool__(self):
         """
-        :return: True iff we have a binding.
+        :return: True iff we have at least one binding.
         """
         return bool(self.matches)
 
@@ -102,6 +104,12 @@ class Interpreter:
             else:
                 raise ValueError(str(a))
 
+    annotations_by_type = {
+        model.Type: type_annotations,
+        model.Function: function_annotations,
+        model.Argument: argument_annotations,
+    }
+
     def interpret_subdescriptor(self, d: ast.Descriptor, m, ctx):
         """
         Interpret `d` as a descriptor in the scope of `m`. For example, `m` might be a function and `d` an argument
@@ -133,18 +141,19 @@ class Interpreter:
             self.interpret_subdescriptors(d.subdescriptors, element, ctx)
         else:
             descriptor_name = d.descriptor.name
+            type_expected_annotations = self.annotations_by_type[type(m)]
+            do_set = descriptor_name in type_expected_annotations or descriptor_name not in known_annotations
             if len(d.arguments) == 1:
-                setattr(m, descriptor_name, d.arguments[0].eval(ctx))
-            if len(d.arguments) == 0:
-                setattr(m, descriptor_name, True)
+                value = d.arguments[0].eval(ctx)
+            elif len(d.arguments) == 0:
+                value = True
+            else:
+                parse_requires(False, "Value descriptors must have exactly one argument.", str(d))
+                return
+            if do_set:
+                setattr(m, descriptor_name, value)
             if isinstance(m, model.Argument):
                 self.interpret_subdescriptor(d, m.type, ctx)
-            # if hasattr(m, descriptor_name) and len(d.arguments) == 1:
-            #     setattr(m, descriptor_name, d.arguments[0].eval(ctx))
-            # elif isinstance(m, model.Argument):
-            #     self.interpret_subdescriptor(d, m.type, ctx)
-            # else:
-            #     raise ValueError(str(d), str(m))
 
     def interpret_subdescriptors(self, descriptors, m, ctx):
         """
@@ -197,6 +206,8 @@ class Interpreter:
         :param match: A Lapis 2 matcher
         :param m: An AvA model object.
         :return: Return a Match
+
+        :see: rule_matches_subdescriptor
         """
         if isinstance(match, ast.MatchDescriptor):
             # MatchDescriptor is handled in rule_matches_subdescriptor
@@ -240,16 +251,13 @@ class Interpreter:
             # XXX: Implement a bunch of other predicates.
             raise ValueError(str(match))
         elif isinstance(match, ast.MatcherValue):
-            # TODO: Matching by string is probably wrong.
+            # TODO: Matching by string is probably wrong. This is just becoming a pile of hacks.
             if match.value.eval({}) == str(m):
+                return match_success
+            if isinstance(m, model.Type) and match.value.eval({}) == str(m.nonconst):
                 return match_success
             else:
                 return match_failure
-
-    # The problem rules are when you want to match, e.g., a function with a specific name.
-    # This is done by matching the specification as a whole with a specific function in it.
-    # This only matches ONE function though, even if there are more than one function which match the pattern.
-    # So I do need to allow for more than one match on the same node with different bindings.
 
     def rule_matches_subdescriptor(self, match: ast.Matcher, m):
         """
@@ -262,11 +270,7 @@ class Interpreter:
         """
         assert isinstance(match, ast.MatchDescriptor)
         if match.descriptor.matches("NOT"):
-            not_match = self.rule_matches(match.block, m)
-            if not_match:
-                return match_failure
-            else:
-                return match_success
+            return match_result(not self.rule_matches(match.block, m))
         elif match.descriptor.matches("function"):
             if not isinstance(m, model.API):
                 return match_failure
@@ -287,7 +291,7 @@ class Interpreter:
             descriptor_name = match.descriptor.name
             if hasattr(m, descriptor_name) and len(match.arguments) == 1:
                 return self.rule_matches(match.arguments[0], getattr(m, descriptor_name))
-            if hasattr(m, descriptor_name) and len(match.arguments) == 0:
+            elif hasattr(m, descriptor_name) and len(match.arguments) == 0:
                 return self.rule_matches(ast.match_value_true, getattr(m, descriptor_name))
             else:
                 return match_failure
