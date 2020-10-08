@@ -12,6 +12,8 @@ def main():
     parser = argparse.ArgumentParser(description="NightWatch generator")
     parser.add_argument("inputfile", metavar="FILENAME", type=str,
                         help="The NightWatch file to parse.")
+    parser.add_argument("--rulefile", "-r", metavar="FILENAME", type=str,
+                        help="The Lapis 2 rule file to use.")
     parser.add_argument("--language", "-x", type=str, default=None,
                         help="The language of the API being parsed.")
     parser.add_argument("-I", type=str, action="append", dest="include_path",
@@ -22,6 +24,8 @@ def main():
                         help="Pass an argument to clang.")
     parser.add_argument("-v", "--verbose", action="store_true", dest="verbose",
                         help="Output verbose information (also passed to underlying libraries).")
+    parser.add_argument("-t", "--trace", action="store_true", dest="trace",
+                        help="Trace rule application.")
     parser.add_argument("-b", "--build", action="store_true", dest="build",
                         help="Build the generated code using the generated makefile.")
     parser.add_argument("-u", "--missing", action="store_true", dest="missing",
@@ -49,6 +53,15 @@ def main():
             from .parser import c
             api = c.parse(args.inputfile, include_path=args.include_path or [], definitions=args.definitions or [],
                           extra_args=(["-v"] if args.verbose else []) + (args.extra_args or []))
+
+            if args.rulefile:
+                import lapis.parser
+                ruleAST = lapis.parser.parse(args.rulefile)
+
+                from lapis.interpreter.ava import Interpreter
+                interpreter = Interpreter(trace=args.trace)
+                interpreter.interpret(ruleAST, api, {})
+                interpreter.apply_rules(api)
 
             if args.dump:
                 print(api)

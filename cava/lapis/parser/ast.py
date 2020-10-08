@@ -73,6 +73,9 @@ class Descriptor(Declaration):
         term = ";" if not block else ""
         return f"{self.descriptor}{args}{block_sep}{block}{term}"
 
+    def __repr__(self):
+        return str(self)
+
 
 # Values
 
@@ -218,7 +221,7 @@ class MatcherValue(Matcher):
     def __str__(self):
         return str(self.value)
 
-match_value_true = MatcherValue(None, True)
+match_value_true = MatcherValue(None, Bool(None, "True"))
     
 class MatcherPredicate(Matcher):
     def __init__(self, parent, predicate, arguments):

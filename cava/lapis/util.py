@@ -29,3 +29,9 @@ class frozendict(collections.Mapping):
                 hash_ ^= hash(pair)
             self._hash = hash_
         return self._hash
+
+    def __str__(self):
+        return str(self._d)
+
+    def __repr__(self):
+        return f"frozendict({str(self._d)})"

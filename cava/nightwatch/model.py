@@ -70,9 +70,13 @@ class Location(namedtuple("Location", ["filename", "line", "column", "offset"]))
         return ":".join(ss)
 
 
+class Model:
+    pass
+
+
 # Types
 
-class Type(object):
+class Type(Model):
     success: Optional[ExprOrStr]
     transfer: Optional[ExprOrStr]
     spelling: str
@@ -289,7 +293,7 @@ class FunctionPointer(Type):
 RET_ARGUMENT_NAME = "ret"
 
 
-class Argument(object):
+class Argument(Model):
     type: Type
 
     def __init__(self, name, type: Type, **annotations):
@@ -371,7 +375,7 @@ class Argument(object):
 
 # Function
 
-class Function(object):
+class Function(Model):
     name: str
     return_value: Argument
     _arguments: List[Argument]
@@ -515,7 +519,7 @@ class Function(object):
 
 # API
 
-class API(object):
+class API(Model):
     functions: List[Function]
 
     def __init__(self, name, version, identifier, number, includes: Collection[str],

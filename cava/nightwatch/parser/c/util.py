@@ -102,7 +102,7 @@ LIBCLANG_INFO = "(INFO: This can be caused by using an unpatched libclang. " \
 
 
 def _as_bool(s):
-    if not s:
+    if not isinstance(s, bool) and not s:
         raise ValueError("Empty boolean is not allowed. " + LIBCLANG_INFO)
     return bool(int(s))
 

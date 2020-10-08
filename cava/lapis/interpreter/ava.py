@@ -2,7 +2,7 @@ from typing import Dict, Any, FrozenSet, Union
 
 from nightwatch import model
 from nightwatch.parser.c import function_annotations, type_annotations, argument_annotations, known_annotations, \
-    parse_assert, parse_requires
+    parse_assert, parse_requires, annotation_parser
 from ..parser import ast
 from ..util import frozendict
 
@@ -29,7 +29,8 @@ class MatchResult:
             for n in other.matches:
                 m = dict(m)
                 m.update(n)
-                s.add(frozendict(m))
+                if self._is_valid(m):
+                    s.add(frozendict(m))
         return MatchResult(frozenset(s))
 
     def __or__(self, other: "MatchResult"):
@@ -49,6 +50,18 @@ class MatchResult:
         """
         return bool(self.matches)
 
+    def _is_valid(self, b):
+        """Return True iff the binding is valid w.r.t. duplicate binding of blocks."""
+        # TODO:PERFORMANCE: This is O(n**2) and doesn't need to be. But n will be small for the moment.
+        l = list(v for v in b.values() if isinstance(v, model.Model))
+        for v in l:
+            if l.count(v) > 1:
+                return False
+        return True
+
+    def __str__(self):
+        return "MatchResult([" + ",".join(str(m) for m in self.matches) + "])"
+
 
 def match_result(v: Union[bool, Dict[str, Any]]) -> MatchResult:
     if v is True:
@@ -66,7 +79,10 @@ match_success = match_result({})
 
 
 class Interpreter:
-    def __init__(self):
+    trace: bool
+
+    def __init__(self, trace):
+        self.trace = trace
         self.rules = []
 
     def interpret(self, a, m, ctx):
@@ -151,7 +167,7 @@ class Interpreter:
                 parse_requires(False, "Value descriptors must have exactly one argument.", str(d))
                 return
             if do_set:
-                setattr(m, descriptor_name, value)
+                setattr(m, descriptor_name, annotation_parser(descriptor_name)(value))
             if isinstance(m, model.Argument):
                 self.interpret_subdescriptor(d, m.type, ctx)
 
@@ -164,6 +180,8 @@ class Interpreter:
         :param ctx: The variable context.
         :param ignore_failure:
         """
+        if self.trace and any(d.descriptor.name != "at" for d in descriptors):
+            print(f"at {m} applying {descriptors}")
         for d in descriptors:
             self.interpret_subdescriptor(d, m, ctx)
 
@@ -171,6 +189,8 @@ class Interpreter:
         rules = list(self.rules)
         rules.sort(key=lambda r: (-r.priority, self.rules.index(r)))
         for r in rules:
+            if self.trace:
+                print(f"Applying rule:\n{r}\n")
             self.apply_rule(r, m)
 
     def apply_rule(self, r: ast.Rule, m):
@@ -181,6 +201,8 @@ class Interpreter:
         for binding in match.matches:
             predicate_result = not r.predicate or eval(r.predicate.eval(binding), dict(binding))
             if predicate_result:
+                if self.trace:
+                    print(f"Matched: {binding}\n")
                 self.interpret_subdescriptors(r.result_descriptors, m, binding)
         # Recursively descend
         if isinstance(m, model.API):
@@ -216,12 +238,12 @@ class Interpreter:
             raise TypeError(str(match))
         elif isinstance(match, ast.MatchBlock):
             result = match_success
+            # XXX: This allows the same child to be matched by multiple clauses in the same pattern.
+            #  This will break negation as well as cause lots of weird matches.
             for d in match.children:
                 result *= self.rule_matches_subdescriptor(d, m)
-            if match.bind:
-                return result * match_result({match.bind: m})
-            else:
-                return result
+            bind = match.bind or f"$ {type(m).__name__}#0x{hex(id(m))}#0x{hex(id(match))}"
+            return result * match_result({bind: m})
         elif isinstance(match, ast.MatcherAny):
             return match_success
         elif isinstance(match, ast.MatcherBind):
@@ -254,9 +276,9 @@ class Interpreter:
             raise ValueError(str(match))
         elif isinstance(match, ast.MatcherValue):
             # TODO: Matching by string is probably wrong. This is just becoming a pile of hacks.
-            if match.value.eval({}) == str(m):
+            if str(match.value.eval({})) == str(m):
                 return match_success
-            if isinstance(m, model.Type) and match.value.eval({}) == str(m.nonconst):
+            if isinstance(m, model.Type) and str(match.value.eval({})) == str(m.nonconst):
                 return match_success
             else:
                 return match_failure
@@ -282,7 +304,9 @@ class Interpreter:
                 return match_failure
             return self.rule_matches_subobjects(match, m.arguments)
         elif match.descriptor.matches("element"):
-            if not isinstance(m, model.Type):
+            if isinstance(m, model.Argument):
+                return self.rule_matches_subdescriptor(match, m.type)
+            if not isinstance(m, model.Type) or not hasattr(m, "pointee"):
                 return match_failure
             return self.rule_matches(match.block, m.pointee)
         elif match.descriptor.matches("field"):
@@ -291,12 +315,17 @@ class Interpreter:
             return self.rule_matches(match.block, m.fields[match.arguments[0].name])
         else:
             descriptor_name = match.descriptor.name
-            if hasattr(m, descriptor_name) and len(match.arguments) == 1:
-                return self.rule_matches(match.arguments[0], getattr(m, descriptor_name))
+            if descriptor_name == "type" and isinstance(m, model.Type) and len(match.arguments) == 1:
+                ret = self.rule_matches(match.arguments[0], m)
+            elif hasattr(m, descriptor_name) and len(match.arguments) == 1:
+                ret = self.rule_matches(match.arguments[0], getattr(m, descriptor_name))
             elif hasattr(m, descriptor_name) and len(match.arguments) == 0:
-                return self.rule_matches(ast.match_value_true, getattr(m, descriptor_name))
+                ret = self.rule_matches(ast.match_value_true, getattr(m, descriptor_name))
             else:
-                return match_failure
+                ret = match_failure
+            if isinstance(m, model.Argument):
+                ret |= self.rule_matches_subdescriptor(match, m.type)
+            return ret
 
     def rule_matches_subobjects(self, match, objects):
         name = match.arguments[0]
