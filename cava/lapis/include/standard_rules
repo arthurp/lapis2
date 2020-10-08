@@ -1,0 +1,45 @@
+rule {
+    type(pointer(not(transferrable())));
+    NOT { type(pointer(pointer(_))); }
+} => {
+    transfer(NW_HANDLE);
+}
+
+rule priority 100 {
+    type(pointer(_));
+} => {
+    transfer(NW_BUFFER);
+    buffer(1);
+}
+
+rule priority -100 {
+    type(nonconst(pointer(_)));
+    type(pointer(nonconst(_)));
+    NOT { transfer(NW_HANDLE); }
+    NOT { input; }
+} => {
+    //input;
+    output;
+}
+
+rule {
+    type(const(pointer(_)));
+} => {
+    output(False);
+    input;
+}
+
+rule {
+    type(pointer(const(_)));
+} => {
+    output(False);
+    input;
+}
+
+rule {
+    type(pointer(char));
+} => {
+    transfer(NW_BUFFER);
+    buffer(```strlen(ava_self)+1```);
+    input;
+}

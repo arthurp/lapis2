@@ -55,10 +55,13 @@ Bind: ID '@'-;
 
 Rule: 'rule' ('priority' priority=INT)? match=MatchBlock '=>' ('if' '(' predicate=Code ')')? result=DescriptorBlock;
 
+// TODO: This should be stored somewhere so we can use it in error messages.
+LineMarker: '#' INT STRING INT*[eolterm];
 
 Comment:
   /\/\/.*$/ |
-  BlockComment
+  BlockComment |
+  LineMarker
 ;
 
 BlockComment: '/*' (!'*/' /./)* '*/';

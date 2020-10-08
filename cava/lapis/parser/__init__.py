@@ -1,4 +1,6 @@
-from pkg_resources import resource_string
+import subprocess
+
+from pkg_resources import resource_string, resource_filename
 from textx import metamodel_from_str
 
 from . import ast
@@ -39,6 +41,18 @@ lapis_metamodel = metamodel_from_str(str(resource_string(__name__, grammar_file_
                                      file_name=grammar_file_name,
                                      classes=classes)
 
+include_directory = resource_filename(__name__, "../include")
+
+
+def preprocess_lapis(code):
+    with subprocess.Popen(["cpp", "-nostdinc", "-isystem", include_directory], encoding="utf-8" if hasattr(code, "encode") else None,
+                          stdout=subprocess.PIPE, stdin=subprocess.PIPE) as proc:
+        stdout, _ = proc.communicate(code)
+        return stdout
+
 
 def parse(fn):
-    return lapis_metamodel.model_from_file(fn)
+    with open(fn, mode="rt") as fi:
+        raw = fi.read()
+    preprocessed = preprocess_lapis(raw)
+    return lapis_metamodel.model_from_str(preprocessed, file_name=fn)
