@@ -151,7 +151,7 @@ class Type(Model):
         "AVA_MANUAL": "manual",
     }
 
-    hidden_annotations = {"location", "spelling", "buffer_deallocator", "callback_stub_function"}
+    hidden_annotations = {"location", "spelling", "buffer_deallocator", "callback_stub_function", "original_type"}
 
     @property
     def annotations(self) -> str:
@@ -162,13 +162,13 @@ class Type(Model):
                 pass
             elif name == "pointee":
                 anns = self.pointee.annotations
-                # if self.transfer not in ("NW_HANDLE", "NW_OPAQUE") and anns:
-                late_annotations += f"{_annotation_prefix}element {{ {anns} }}\n"
+                if self.transfer not in ("NW_HANDLE", "NW_OPAQUE") and anns:
+                    late_annotations += f"{_annotation_prefix}element {{ {anns} }}\n"
             elif name == "fields":
                 for fname, field in self.fields.items():
                     anns = field.annotations
-                    # if anns:
-                    late_annotations += f"{_annotation_prefix}field({fname}) {{ {anns} }}\n"
+                    if anns:
+                        late_annotations += f"{_annotation_prefix}field({fname}) {{ {anns} }}\n"
             elif name == "transfer" and value in self.transfer_spellings and value != default_annotations.get(name):
                 if value in ("NW_CALLBACK", "NW_CALLBACK_REGISTRATION"):
                     annotations += f"{_annotation_prefix}{self.transfer_spellings[value]}({self.callback_stub_function});\n"
@@ -336,7 +336,7 @@ class Argument(Model):
         b = self._all_arguments.index(other)
         return a < b
 
-    hidden_annotations = {"ret", "function", "location", "name"}
+    hidden_annotations = {"ret", "function", "location", "name", "type", "original_type"}
 
     @property
     def annotations(self) -> str:
@@ -344,8 +344,6 @@ class Argument(Model):
         for name, value in self.__dict__.items():
             if name in self.hidden_annotations:
                 pass
-            # elif name == "type":
-            #     pass # Handled below
             elif name == "depends_on" and value:
                 annotations += f"{_annotation_prefix}{name}({', '.join(value)});\n"
             elif not name.startswith("_") and value != default_annotations.get(name):
@@ -475,7 +473,8 @@ class Function(Model):
         "NW_FLUSH": "flush",
     }
 
-    hidden_annotations = {"api", "location", "name", "return_value", "epilogue", "prologue", "arguments"}
+    hidden_annotations = {"api", "location", "name", "return_value", "epilogue", "prologue", "arguments",
+                          "type", "original_type"}
 
     def __str__(self):
         annotations = ""
