@@ -2,23 +2,22 @@ rule {
     type(pointer(not(transferrable())));
     NOT { type(pointer(pointer(_))); }
 } => {
-    transfer(NW_HANDLE);
+    handle;
 }
 
 rule priority 100 {
     type(pointer(_));
+//    buffer(b@_);
 } => {
-    transfer(NW_BUFFER);
     buffer(1);
 }
 
 rule priority -100 {
     type(nonconst(pointer(_)));
     type(pointer(nonconst(_)));
-    NOT { transfer(NW_HANDLE); }
+    NOT { handle; }
     NOT { input; }
 } => {
-    //input;
     output;
 }
 
@@ -39,7 +38,33 @@ rule {
 rule {
     type(pointer(char));
 } => {
-    transfer(NW_BUFFER);
     buffer(```strlen(ava_self)+1```);
     input;
+}
+
+rule priority -1000 {
+    buffer(b @ _);
+} => if (```b is not None and b != 0```) {
+    transfer(NW_BUFFER);
+}
+rule priority -1000 {
+    handle;
+} => {
+    transfer(NW_HANDLE);
+}
+rule priority -1000 {
+    opaque;
+} => {
+    transfer(NW_OPAQUE);
+}
+
+rule priority -1000 {
+    async;
+} => {
+    synchrony(NW_ASYNC);
+}
+rule priority -1000 {
+    sync;
+} => {
+    synchrony(NW_SYNC);
 }

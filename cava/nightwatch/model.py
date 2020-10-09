@@ -73,6 +73,7 @@ class Location(namedtuple("Location", ["filename", "line", "column", "offset"]))
 class Model:
     pass
 
+global_hidden_annotations = {"handle", "opaque", "async", "sync", "nontransferrable", "is_const"}
 
 # Types
 
@@ -151,7 +152,8 @@ class Type(Model):
         "AVA_MANUAL": "manual",
     }
 
-    hidden_annotations = {"location", "spelling", "buffer_deallocator", "callback_stub_function", "original_type"}
+    hidden_annotations = {"location", "spelling", "buffer_deallocator", "callback_stub_function", "original_type"} | \
+        global_hidden_annotations
 
     @property
     def annotations(self) -> str:
@@ -336,7 +338,8 @@ class Argument(Model):
         b = self._all_arguments.index(other)
         return a < b
 
-    hidden_annotations = {"ret", "function", "location", "name", "type", "original_type"}
+    hidden_annotations = {"ret", "function", "location", "name", "type", "original_type"} | \
+        global_hidden_annotations
 
     @property
     def annotations(self) -> str:
@@ -474,7 +477,7 @@ class Function(Model):
     }
 
     hidden_annotations = {"api", "location", "name", "return_value", "epilogue", "prologue", "arguments",
-                          "type", "original_type"}
+                          "type", "original_type"} | global_hidden_annotations
 
     def __str__(self):
         annotations = ""

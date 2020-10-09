@@ -31,8 +31,8 @@ QuotedCodeSegmentInterpolate[noskipws]: '$' '{' variable=Id '}';
 QuotedCodeSegmentDollar[noskipws]: '$'- '$';
 QuotedCodeSegmentBacktick[noskipws]: !'```' '`';
 QuotedCodeSegmentLiteral[noskipws]: /[^`$]/+;
-QuotedCodeSegment: QuotedCodeSegmentInterpolate | QuotedCodeSegmentDollar | QuotedCodeSegmentBacktick | QuotedCodeSegmentLiteral;
-Code: /\s*/- '```'- segments*=QuotedCodeSegment '```'- /\s*/-;
+QuotedCodeSegment[noskipws]: QuotedCodeSegmentInterpolate | QuotedCodeSegmentDollar | QuotedCodeSegmentBacktick | QuotedCodeSegmentLiteral;
+Code[noskipws]: /\s*/- '```'- segments*=QuotedCodeSegment '```'- /\s*/-;
 
 BoolValueName: 'True' | 'False';
 Bool: value=BoolValueName;

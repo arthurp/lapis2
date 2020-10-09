@@ -60,8 +60,7 @@ def main():
 
                 from lapis.interpreter.ava import Interpreter
                 interpreter = Interpreter(trace=args.trace)
-                interpreter.interpret(ruleAST, api, {})
-                interpreter.apply_rules(api)
+                interpreter(ruleAST, api)
 
             if args.dump:
                 print(api)

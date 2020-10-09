@@ -171,7 +171,7 @@ class MatchDescriptor(Matcher):
     def __init__(self, parent, descriptor, argument_list, block):
         self.descriptor = descriptor
         self.arguments = argument_list.arguments if argument_list else []
-        self.block = block
+        self.block = block or MatchBlock(self, None, [])
 
     def __str__(self):
         args = ", ".join(str(a) for a in self.arguments)

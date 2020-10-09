@@ -2,7 +2,7 @@ from typing import Dict, Any, FrozenSet, Union
 
 from nightwatch import model
 from nightwatch.parser.c import function_annotations, type_annotations, argument_annotations, known_annotations, \
-    parse_assert, parse_requires, annotation_parser
+    parse_assert, parse_requires, annotation_parser, parse_expects
 from ..parser import ast
 from ..util import frozendict
 
@@ -78,6 +78,12 @@ match_failure = MatchResult(frozenset())
 match_success = match_result({})
 
 
+def top_level_rule(result):
+    match = ast.MatchBlock(None, "spec", [])
+    predicate = ast.Code(None, ["type(spec).__name__ == 'API'"])
+    return ast.Rule(None, match, priority=0, predicate=predicate, result=result)
+
+
 class Interpreter:
     trace: bool
 
@@ -85,12 +91,23 @@ class Interpreter:
         self.trace = trace
         self.rules = []
 
-    def interpret(self, a, m, ctx):
+    def __call__(self, a, m):
+        self.extract(a)
+        self.apply_rules(m)
+
+    def extract(self, a):
+        for d in a.declarations:
+            if isinstance(d, ast.Descriptor):
+                self.rules.append(top_level_rule(d))
+            elif isinstance(d, ast.Rule):
+                self.rules.append(d)
+
+    def apply(self, a, m, ctx):
         """
         Match the AST to the model. `a` and `m` must be exactly analogous: Both a function of the same name,
         for instance.
 
-        This function interprets the special descriptor "at" whose argument must be a context reference whose value
+        This function applys the special descriptor "at" whose argument must be a context reference whose value
         is a model object. The subdescriptors of "at" are applied to the content of the model object.
 
         :param a: A Lapis 2 AST
@@ -101,22 +118,22 @@ class Interpreter:
             assert isinstance(m, model.API)
             for d in a.declarations:
                 if isinstance(d, ast.Descriptor):
-                    self.interpret_subdescriptor(d, m, ctx)
+                    self.apply_subdescriptor(d, m, ctx)
                 elif isinstance(d, ast.Rule):
-                    self.rules.append(d)
+                    raise TypeError(d)
         elif isinstance(a, ast.Descriptor):
             if a.descriptor.matches("function"):
                 assert isinstance(m, model.Function)
                 for d in a.subdescriptors:
-                    self.interpret_subdescriptor(d, m, ctx)
+                    self.apply_subdescriptor(d, m, ctx)
             elif a.descriptor.matches("argument"):
                 assert isinstance(m, model.Argument)
                 assert isinstance(m.type, model.Type)
-                self.interpret_subdescriptors(a.subdescriptors, m.type, ctx)
-                self.interpret_subdescriptors(a.subdescriptors, m, ctx)
+                self.apply_subdescriptors(a.subdescriptors, m.type, ctx)
+                self.apply_subdescriptors(a.subdescriptors, m, ctx)
             elif isinstance(m, model.Type):
                 assert isinstance(m, model.Type)
-                self.interpret_subdescriptors(a.subdescriptors, m, ctx)
+                self.apply_subdescriptors(a.subdescriptors, m, ctx)
             else:
                 raise ValueError(str(a))
 
@@ -126,7 +143,7 @@ class Interpreter:
         model.Argument: argument_annotations,
     }
 
-    def interpret_subdescriptor(self, d: ast.Descriptor, m, ctx):
+    def apply_subdescriptor(self, d: ast.Descriptor, m, ctx):
         """
         Interpret `d` as a descriptor in the scope of `m`. For example, `m` might be a function and `d` an argument
         descriptor for an argument to that function, or a synchrony descriptor for that function.
@@ -138,23 +155,23 @@ class Interpreter:
         """
         if d.descriptor.matches("at"):
             target = d.arguments[0].eval(ctx)
-            self.interpret_subdescriptors(d.subdescriptors, target, ctx)
+            self.apply_subdescriptors(d.subdescriptors, target, ctx)
         elif isinstance(m, model.API) and d.descriptor.matches("function"):
             function_name = d.arguments[0].name
             function = next(f for f in m.functions if f.name == function_name)
-            self.interpret(d, function, ctx)
+            self.apply(d, function, ctx)
         elif isinstance(m, model.Function) and d.descriptor.matches("argument"):
             arg_name = d.arguments[0].eval(ctx)
             arg = next(a for a in m.arguments if a.name == arg_name)
-            self.interpret(d, arg, ctx)
+            self.apply(d, arg, ctx)
         elif isinstance(m, model.Type) and d.descriptor.matches("field"):
             field = m.fields[d.arguments[0].eval(ctx)]
             assert isinstance(field, model.Type)
-            self.interpret_subdescriptors(d.subdescriptors, field, ctx)
+            self.apply_subdescriptors(d.subdescriptors, field, ctx)
         elif isinstance(m, model.Type) and d.descriptor.matches("element"):
             element = m.pointee
             assert isinstance(element, model.Type)
-            self.interpret_subdescriptors(d.subdescriptors, element, ctx)
+            self.apply_subdescriptors(d.subdescriptors, element, ctx)
         else:
             descriptor_name = d.descriptor.name
             type_expected_annotations = self.annotations_by_type[type(m)]
@@ -164,16 +181,16 @@ class Interpreter:
             elif len(d.arguments) == 0:
                 value = True
             else:
-                parse_requires(False, "Value descriptors must have exactly one argument.", str(d))
+                parse_requires(False, "Value descriptors must have at most one argument.", str(d))
                 return
             if do_set:
                 setattr(m, descriptor_name, annotation_parser(descriptor_name)(value))
             if isinstance(m, model.Argument):
-                self.interpret_subdescriptor(d, m.type, ctx)
+                self.apply_subdescriptor(d, m.type, ctx)
 
-    def interpret_subdescriptors(self, descriptors, m, ctx):
+    def apply_subdescriptors(self, descriptors, m, ctx):
         """
-        Do interpret_subdescriptor for each descriptor.
+        Do apply_subdescriptor for each descriptor.
 
         :param descriptors: A collection of Lapis 2 descriptors.
         :param m: An AvA model object.
@@ -183,7 +200,7 @@ class Interpreter:
         if self.trace and any(d.descriptor.name != "at" for d in descriptors):
             print(f"at {m} applying {descriptors}")
         for d in descriptors:
-            self.interpret_subdescriptor(d, m, ctx)
+            self.apply_subdescriptor(d, m, ctx)
 
     def apply_rules(self, m):
         rules = list(self.rules)
@@ -202,8 +219,9 @@ class Interpreter:
             predicate_result = not r.predicate or eval(r.predicate.eval(binding), dict(binding))
             if predicate_result:
                 if self.trace:
-                    print(f"Matched: {binding}\n")
-                self.interpret_subdescriptors(r.result_descriptors, m, binding)
+                    filtered = ", ".join(f"{k}={str(v)}" for k, v in binding.items() if not k.startswith("$ "))
+                    print(f"Matched: {filtered}\n")
+                self.apply_subdescriptors(r.result_descriptors, m, binding)
         # Recursively descend
         if isinstance(m, model.API):
             for f in m.functions:
@@ -238,8 +256,6 @@ class Interpreter:
             raise TypeError(str(match))
         elif isinstance(match, ast.MatchBlock):
             result = match_success
-            # XXX: This allows the same child to be matched by multiple clauses in the same pattern.
-            #  This will break negation as well as cause lots of weird matches.
             for d in match.children:
                 result *= self.rule_matches_subdescriptor(d, m)
             bind = match.bind or f"$ {type(m).__name__}#0x{hex(id(m))}#0x{hex(id(match))}"
@@ -322,6 +338,7 @@ class Interpreter:
             elif hasattr(m, descriptor_name) and len(match.arguments) == 0:
                 ret = self.rule_matches(ast.match_value_true, getattr(m, descriptor_name))
             else:
+                # parse_expects(False, f"Failed to match: {match}")
                 ret = match_failure
             if isinstance(m, model.Argument):
                 ret |= self.rule_matches_subdescriptor(match, m.type)
