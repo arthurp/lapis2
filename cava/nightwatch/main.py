@@ -88,8 +88,7 @@ def main():
                 rule_descriptor_count = interpreter.descriptor_count
                 print("Final nondefault count:", final_nondefault_count)
                 print("Rule descriptor count:", rule_descriptor_count)
-                print(final_nondefault_count / (rule_descriptor_count + initial_nondefault_count))
-
+                # print(final_nondefault_count / (rule_descriptor_count + initial_nondefault_count))
 
             if args.dump:
                 print(api)

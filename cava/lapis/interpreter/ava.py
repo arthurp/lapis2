@@ -385,5 +385,5 @@ class Interpreter:
                 for o in f.arguments:
                     name = o.name
                     if a != o and any(name in c for c in codes):
-                        a.depends_on.add(name)
+                        a.depends_on |= {name}
             f.sort_arguments()

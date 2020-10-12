@@ -199,7 +199,7 @@ def parse(filename: str, include_path, definitions, extra_args, no_ava_rules):
         name = arg.displayname if not is_ret else RET_ARGUMENT_NAME
         if not name:
             name = "__arg{}".format(i)
-        annotations["depends_on"].discard(name)
+        annotations["depends_on"] -= {name}
         apply_rules(arg, annotations, name=name)
         with location(f"argument {term.yellow(name)}", convert_location(arg.location)):
             if not is_ret:

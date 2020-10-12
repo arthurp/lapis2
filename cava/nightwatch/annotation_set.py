@@ -4,8 +4,8 @@ from nightwatch import c_dsl
 from nightwatch.parser import parse_requires
 
 default_annotations = dict(
-    depends_on=set(),
-    object_depends_on=set(),
+    depends_on=frozenset(),
+    object_depends_on=frozenset(),
     object_record=False,
     object_explicit_state_replace=c_dsl.Expr("NULL"),
     object_explicit_state_extract=c_dsl.Expr("NULL"),
