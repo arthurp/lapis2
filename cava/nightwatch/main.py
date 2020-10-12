@@ -14,6 +14,12 @@ def main():
                         help="The NightWatch file to parse.")
     parser.add_argument("--rulefile", "-r", metavar="FILENAME", type=str,
                         help="The Lapis 2 rule file to use.")
+    parser.add_argument("--funclist", metavar="FILENAME", type=str,
+                        help="A file listing supported functions, one per line.")
+    parser.add_argument("--dump-funclist", action="store_true", dest="dump_funclist",
+                        help="Output the list of supported functions.")
+    parser.add_argument("--no-ava-rules", action="store_true", dest="no_ava_rules",
+                        help="Disable AvA-level rules.")
     parser.add_argument("--language", "-x", type=str, default=None,
                         help="The language of the API being parsed.")
     parser.add_argument("-I", type=str, action="append", dest="include_path",
@@ -52,7 +58,20 @@ def main():
 
             from .parser import c
             api = c.parse(args.inputfile, include_path=args.include_path or [], definitions=args.definitions or [],
-                          extra_args=(["-v"] if args.verbose else []) + (args.extra_args or []))
+                          extra_args=(["-v"] if args.verbose else []) + (args.extra_args or []),
+                          no_ava_rules=args.no_ava_rules)
+
+            if args.funclist:
+                funclist = [s.strip() for s in open(args.funclist, "rt").readlines()]
+
+            if args.dump_funclist:
+                print("\n".join(f.name for f in api.supported_functions))
+
+            if args.funclist:
+                api.force_supported_list(funclist)
+
+            initial_nondefault_count = api.nondefault_count
+            print("Initial nondefault count:", initial_nondefault_count)
 
             if args.rulefile:
                 import lapis.parser
@@ -61,6 +80,16 @@ def main():
                 from lapis.interpreter.ava import Interpreter
                 interpreter = Interpreter(trace=args.trace)
                 interpreter(ruleAST, api)
+
+                if args.funclist:
+                    api.force_supported_list(funclist)
+
+                final_nondefault_count = api.nondefault_count
+                rule_descriptor_count = interpreter.descriptor_count
+                print("Final nondefault count:", final_nondefault_count)
+                print("Rule descriptor count:", rule_descriptor_count)
+                print(final_nondefault_count / (rule_descriptor_count + initial_nondefault_count))
+
 
             if args.dump:
                 print(api)

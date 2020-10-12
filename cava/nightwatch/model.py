@@ -197,6 +197,38 @@ class Type(Model):
         annotations += late_annotations
         return annotations
 
+    @property
+    def nondefault_count(self) -> int:
+        count = 0
+        for name, value in self.__dict__.items():
+            if name in self.hidden_annotations:
+                pass
+            elif name == "pointee":
+                c = self.pointee.nondefault_count
+                if self.transfer not in ("NW_HANDLE", "NW_OPAQUE") and c:
+                    count += c + 1
+            elif name == "fields":
+                for fname, field in self.fields.items():
+                    c = field.nondefault_count
+                    if c:
+                        count += c + 1
+            elif name == "transfer" and value in self.transfer_spellings and value != default_annotations.get(name):
+                count += 1
+            elif name == "lifetime" and value in self.lifetime_spellings and value != default_annotations.get(name):
+                if self.lifetime_spellings[value]:
+                    count += 1
+            elif name == "buffer":
+                if self.transfer == "NW_BUFFER":
+                    count += 1
+            elif name == "buffer_allocator" and value != default_annotations.get(name):
+                count += 1
+            elif name.endswith("allocates_resources") and value:
+                count += len(value)
+            elif not name.startswith("_") and value != default_annotations.get(name):
+                if value:
+                    count += 1
+        return count
+
     def __str__(self):
         return self.spelling
 
@@ -365,6 +397,21 @@ class Argument(Model):
         else:
             return ""
 
+
+    @property
+    def nondefault_count(self) -> int:
+        count = 0
+        for name, value in self.__dict__.items():
+            if name in self.hidden_annotations:
+                pass
+            elif name == "depends_on" and value:
+                pass
+            elif not name.startswith("_") and value != default_annotations.get(name):
+                if value:
+                    count += 1
+        count += self.type.nondefault_count
+        return count + 1 if count else 0
+
     @property
     def declaration(self):
         return self.type.attach_to(self.name)
@@ -393,7 +440,7 @@ class Function(Model):
         self.name = name
         self.return_value = return_value
         self._original_arguments = arguments
-        self.arguments = self._order_arguments(arguments, location)
+        self.arguments = arguments
         self.synchrony = "NW_SYNC"
         self.ignore = False
         self.callback_decl = False
@@ -403,6 +450,8 @@ class Function(Model):
         self.generate_timing_code = False
         self.disable_native = False
         self.__dict__.update(annotations)
+
+        self.sort_arguments()
 
         assert not self.callback_decl or hasattr(self, "type") and self.type
 
@@ -426,9 +475,8 @@ class Function(Model):
     def implicit_arguments(self) -> Iterator[Argument]:
         return (a for a in self._original_arguments if a.implicit_argument)
 
-    @classmethod
-    def _get_argument_by_name(cls, arguments, name: str, default = None) -> Argument:
-        for a in arguments:
+    def _get_argument_by_name(self, name: str, default = None) -> Argument:
+        for a in self.arguments:
             if a.name == name:
                 return a
         if default is not None:
@@ -436,16 +484,15 @@ class Function(Model):
         else:
             raise LookupError(name)
 
-    @classmethod
-    def _order_arguments(cls, arguments: List[Argument], location) -> List[Argument]:
+    def sort_arguments(self) -> List[Argument]:
         dag = {}
         # Build dag to have deps specified by depends_on, and a dep
         # chain through all the NON-depends_on arguments in order.
-        for arg in arguments:
-            arg._all_arguments = arguments
+        for arg in self.arguments:
+            arg._all_arguments = self.arguments
             try:
                 if arg.depends_on:
-                    dag[arg] = set(cls._get_argument_by_name(arguments, n) for n in arg.depends_on)
+                    dag[arg] = set(self._get_argument_by_name(n) for n in arg.depends_on)
                 else:
                     dag[arg] = set()
             except LookupError as e:
@@ -455,11 +502,11 @@ class Function(Model):
 
         # Compute an order which honors the deps
         try:
-            return toposort_flatten(dag, sort=True)
+            self.arguments = toposort_flatten(dag, sort=True)
         except CircularDependencyError:
             parse_requires(False,
                            "The dependencies between arguments are cyclic.",
-                           loc=location)
+                           loc=self.location)
 
     @property
     def contained_types(self) -> Set[Type]:
@@ -478,6 +525,26 @@ class Function(Model):
 
     hidden_annotations = {"api", "location", "name", "return_value", "epilogue", "prologue", "arguments",
                           "type", "original_type"} | global_hidden_annotations
+
+    @property
+    def nondefault_count(self):
+        count = 0
+        for name, value in self.__dict__.items():
+            if name in self.hidden_annotations:
+                pass
+            elif name == "synchrony" and value in self.synchrony_spellings:
+                if value != "NW_SYNC":
+                    count += 1
+            elif name == "consumes_resources" and value:
+                count += len(value)
+            elif name == "supported":
+                pass
+            elif not name.startswith("_") and value != default_annotations.get(name):
+                if value:
+                    count += 1
+        count += sum(a.nondefault_count for a in self.arguments)
+        count += self.return_value.nondefault_count
+        return count + 1 if count else 0
 
     def __str__(self):
         annotations = ""
@@ -554,8 +621,19 @@ class API(Model):
                            "A declared callback specification and a function argument may not have the same name.")
         # TODO: Add check to verify that all callback_stubs are actually the names of callback_decls.
 
+    def force_supported_list(self, funclist):
+        funcs = set(funclist)
+        for f in self.functions:
+            f.supported = f.name in funcs
+
+    @property
+    def nondefault_count(self):
+        count = sum(f.nondefault_count for f in self.supported_functions)
+        # TODO: add API level values to count?
+        return count
+
     def __str__(self):
-        functions = lines(str(f) for f in self.functions)
+        functions = lines(str(f) for f in self.supported_functions)
         includes = self.include_lines
         register_metadata = f"{_annotation_prefix}register_metadata({self.metadata_type.spelling});" if self.metadata_type else ""
         return indent_c(f"""
@@ -585,7 +663,7 @@ class API(Model):
 
     @property
     def supported_functions(self) -> Iterator[Function]:
-        """Generate all the unsupported."""
+        """Generate all the supported."""
         return (f for f in self.functions if f.supported)
 
     @property

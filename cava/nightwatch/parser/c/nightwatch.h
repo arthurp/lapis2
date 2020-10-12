@@ -405,19 +405,19 @@ extern int ava_is_out;
 
 /////// Defaults
 
-//ava_non_transferable_types {
-//    ava_handle;
-//}
-//
-//ava_const_pointer_types ava_defaults {
-//    ava_in;
-//    ava_buffer(1);
-//}
-//ava_nonconst_pointer_types ava_defaults {
-//    ava_in;
-//    ava_out;
-//    ava_buffer(1);
-//}
+ava_non_transferable_types {
+    ava_handle;
+}
+
+ava_const_pointer_types ava_defaults {
+    ava_in;
+    ava_buffer(1);
+}
+ava_nonconst_pointer_types ava_defaults {
+    ava_in;
+    ava_out;
+    ava_buffer(1);
+}
 
 /////// Utility functions
 

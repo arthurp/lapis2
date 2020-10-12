@@ -1,8 +1,10 @@
-from typing import Dict, Any, FrozenSet, Union
+from collections import Iterable
+from functools import reduce
+from typing import Dict, Any, FrozenSet, Union, List
 
 from nightwatch import model
 from nightwatch.parser.c import function_annotations, type_annotations, argument_annotations, known_annotations, \
-    parse_assert, parse_requires, annotation_parser, parse_expects
+    parse_assert, parse_requires, annotation_parser, parse_expects, c_dsl
 from ..parser import ast
 from ..util import frozendict
 
@@ -85,6 +87,7 @@ def top_level_rule(result):
 
 
 class Interpreter:
+    rules: List[ast.Rule]
     trace: bool
 
     def __init__(self, trace):
@@ -94,6 +97,11 @@ class Interpreter:
     def __call__(self, a, m):
         self.extract(a)
         self.apply_rules(m)
+        self.hack_depends_on(m)
+
+    @property
+    def descriptor_count(self):
+        return sum(r.descriptor_count for r in self.rules)
 
     def extract(self, a):
         for d in a.declarations:
@@ -137,11 +145,12 @@ class Interpreter:
             else:
                 raise ValueError(str(a))
 
-    annotations_by_type = {
-        model.Type: type_annotations,
-        model.Function: function_annotations,
-        model.Argument: argument_annotations,
-    }
+    def annotations_by_type(self, m):
+        if isinstance(m, model.API): return {}
+        if isinstance(m, model.Type): return type_annotations
+        if isinstance(m, model.Function): return function_annotations
+        if isinstance(m, model.Argument): return argument_annotations
+        raise TypeError(m)
 
     def apply_subdescriptor(self, d: ast.Descriptor, m, ctx):
         """
@@ -174,7 +183,7 @@ class Interpreter:
             self.apply_subdescriptors(d.subdescriptors, element, ctx)
         else:
             descriptor_name = d.descriptor.name
-            type_expected_annotations = self.annotations_by_type[type(m)]
+            type_expected_annotations = self.annotations_by_type(m)
             do_set = descriptor_name in type_expected_annotations or descriptor_name not in known_annotations
             if len(d.arguments) == 1:
                 value = d.arguments[0].eval(ctx)
@@ -259,6 +268,7 @@ class Interpreter:
             for d in match.children:
                 result *= self.rule_matches_subdescriptor(d, m)
             bind = match.bind or f"$ {type(m).__name__}#0x{hex(id(m))}#0x{hex(id(match))}"
+            # TODO: Because invalidation happens here, negation will not work since it will not see the invalidation.
             return result * match_result({bind: m})
         elif isinstance(match, ast.MatcherAny):
             return match_success
@@ -352,3 +362,28 @@ class Interpreter:
             overall_match = name_match * self.rule_matches(match.block, f)
             result |= overall_match
         return result
+
+    @classmethod
+    def _find_code(cls, v):
+        ret = set()
+        if isinstance(v, c_dsl.Expr):
+            ret.add(v)
+        elif isinstance(v, model.Model):
+            for name, child in v.__dict__.items():
+                if name in {"original_type", "function"} or name.startswith("_"):
+                    continue
+                ret.update(cls._find_code(child))
+        elif isinstance(v, Iterable) and not isinstance(v, str):
+            for c in v:
+                ret.update(cls._find_code(c))
+        return ret
+
+    def hack_depends_on(self, m: model.API):
+        for f in m.functions:
+            for a in f.arguments:
+                codes = {str(c) for c in self._find_code(a)}
+                for o in f.arguments:
+                    name = o.name
+                    if a != o and any(name in c for c in codes):
+                        a.depends_on.add(name)
+            f.sort_arguments()

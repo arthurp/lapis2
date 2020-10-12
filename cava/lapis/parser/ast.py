@@ -23,6 +23,10 @@ class DescriptorSequence():
         else:
             return ""
 
+    @property
+    def descriptor_count(self):
+        return sum(d.descriptor_count for d in self.children)
+
 def simplify_block(parent, block):
     if block is None:
         return DescriptorSequence(parent, [])
@@ -58,6 +62,10 @@ class Descriptor(Declaration):
             return self.children.children
         else:
             return [self.children]
+
+    @property
+    def descriptor_count(self):
+        return sum(d.descriptor_count for d in self.subdescriptors) + 1
 
     def __str__(self):
         if not self.children and self.arguments and isinstance(self.arguments[-1], Code):
@@ -173,6 +181,17 @@ class MatchDescriptor(Matcher):
         self.arguments = argument_list.arguments if argument_list else []
         self.block = block or MatchBlock(self, None, [])
 
+    @property
+    def subdescriptors(self) -> Collection["MatchDescriptor"]:
+        if isinstance(self.block, MatchBlock):
+            return self.block.children
+        else:
+            return [self.block]
+
+    @property
+    def descriptor_count(self):
+        return sum(d.descriptor_count for d in self.subdescriptors) + 1
+
     def __str__(self):
         args = ", ".join(str(a) for a in self.arguments)
         if args:
@@ -187,7 +206,11 @@ class MatchBlock(Matcher):
     def __init__(self, parent, bind, children):
         self.bind = bind
         self.children = children
-        
+
+    @property
+    def descriptor_count(self):
+        return sum(d.descriptor_count for d in self.children)
+
     def __str__(self):
         bind = ""
         if self.bind:
@@ -248,6 +271,10 @@ class Rule(Declaration):
         self.priority = priority or 0
         self.predicate = predicate
         self.result = simplify_block(self, result)
+
+    @property
+    def descriptor_count(self):
+        return self.match.descriptor_count + self.result.descriptor_count
 
     @property
     def result_descriptors(self) -> Collection["Descriptor"]:

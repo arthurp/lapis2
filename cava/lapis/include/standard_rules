@@ -7,8 +7,8 @@ rule {
 
 rule priority 100 {
     type(pointer(_));
-//    buffer(b@_);
-} => {
+    buffer(b@_);
+} => if(```b is None or b == 0```) {
     buffer(1);
 }
 
@@ -39,7 +39,6 @@ rule {
     type(pointer(char));
 } => {
     buffer(```strlen(ava_self)+1```);
-    input;
 }
 
 rule priority -1000 {

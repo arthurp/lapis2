@@ -9,7 +9,7 @@ allocates_amount_prefix = "allocates_amount_"
 deallocates_amount_prefix = "deallocates_amount_"
 
 
-def parse(filename: str, include_path, definitions, extra_args):
+def parse(filename: str, include_path, definitions, extra_args, no_ava_rules):
     index = Index.create(True)
     includes = [s
                 for p in include_path
@@ -67,6 +67,9 @@ def parse(filename: str, include_path, definitions, extra_args):
     final_rules = []
 
     def apply_rules(c, annotations, *, name=None):
+        if no_ava_rules:
+            return
+
         if name:
             annotations["name"] = name
         def do(rules):
@@ -276,8 +279,10 @@ def parse(filename: str, include_path, definitions, extra_args):
             return_value = convert_argument(-1, cursor, annotations.subelement("return_value"),
                                             is_ret=True, type=cursor.result_type)
 
-            # if "unsupported" in annotations:
-            #     supported = not bool(annotations["unsupported"])
+            if "unsupported" in annotations:
+                supported = not bool(annotations["unsupported"])
+            if no_ava_rules:
+                supported = True
 
             disable_native = False
             if "disable_native" in annotations:
@@ -292,7 +297,7 @@ def parse(filename: str, include_path, definitions, extra_args):
                 prologue=prologue,
                 epilogue=epilogue,
                 consumes_resources=resources,
-                supported=True,
+                supported=supported,
                 disable_native=disable_native,
                 type=convert_type(cursor.type, cursor.mangled_name, annotation_set(), set()),
                 **annotations.direct(function_annotations).flatten())
