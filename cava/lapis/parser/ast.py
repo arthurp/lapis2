@@ -266,11 +266,12 @@ class MatcherAny(Matcher):
 # Rules
 
 class Rule(Declaration):
-    def __init__(self, parent, match, priority, predicate, result):
+    def __init__(self, parent, match, priority, predicate, result, type):
         self.match = match
         self.priority = priority or 0
         self.predicate = predicate
         self.result = simplify_block(self, result)
+        self.type = type
 
     @property
     def descriptor_count(self):

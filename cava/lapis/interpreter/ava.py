@@ -83,7 +83,7 @@ match_success = match_result({})
 def top_level_rule(result):
     match = ast.MatchBlock(None, "spec", [])
     predicate = ast.Code(None, ["type(spec).__name__ == 'API'"])
-    return ast.Rule(None, match, priority=0, predicate=predicate, result=result)
+    return ast.Rule(None, match, priority=0, predicate=predicate, result=result, type="rule")
 
 
 class Interpreter:
@@ -101,7 +101,7 @@ class Interpreter:
 
     @property
     def descriptor_count(self):
-        return sum(r.descriptor_count for r in self.rules)
+        return sum(r.descriptor_count for r in self.rules if r.type == "rule")
 
     def extract(self, a):
         for d in a.declarations:
@@ -146,6 +146,10 @@ class Interpreter:
                 raise ValueError(str(a))
 
     def annotations_by_type(self, m):
+        """
+        :param m: an AvA model object.
+        :return: A set of annotation names that are expected to be present on object with the same type as `m`.
+        """
         if isinstance(m, model.API): return {}
         if isinstance(m, model.Type): return type_annotations
         if isinstance(m, model.Function): return function_annotations
@@ -277,7 +281,7 @@ class Interpreter:
             result = self.rule_matches(match.child, m)
             return result * match_result({match.bind: m})
         elif isinstance(match, ast.MatcherString):
-            return match_result(bool(match.re.match(str(m))))
+            return match_result(bool(match.re.fullmatch(str(m))))
         elif isinstance(match, ast.MatcherPredicate):
             if match.predicate == "pointer":
                 if isinstance(m, model.Type) and hasattr(m, "pointee") and m.pointee:

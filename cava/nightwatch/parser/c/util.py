@@ -1,11 +1,10 @@
+import ast
 from pathlib import Path
 
-import ast
-
 from nightwatch.annotation_set import annotation_set
-from ...model import *
-from ...c_dsl import *
 from .clanginterface import CursorKind
+from ...c_dsl import *
+from ...model import *
 from ...parser import *
 
 
@@ -86,12 +85,12 @@ def convert_location(loc):
 resource_directory = Path(__file__).parent
 nightwatch_parser_c_header = "nightwatch.h"
 
-function_annotations = {"synchrony", "ignore", "callback_decl", "object_record", "generate_timing_code"}
-type_annotations = {"transfer", "success", "name", "element", "deallocates", "allocates", "buffer",
-                    "object_explicit_state_extract", "object_explicit_state_replace",
-                    "buffer_allocator", "buffer_deallocator", "object_record", "object_depends_on",
-                    "callback_stub_function", "lifetime", "lifetime_coupled"}
-argument_annotations = {"depends_on", "value", "implicit_argument", "input", "output", "no_copy", "userdata"}
+function_annotations = frozenset({"synchrony", "ignore", "callback_decl", "object_record", "generate_timing_code"})
+type_annotations = frozenset({"transfer", "success", "name", "element", "deallocates", "allocates", "buffer",
+                              "object_explicit_state_extract", "object_explicit_state_replace",
+                              "buffer_allocator", "buffer_deallocator", "object_record", "object_depends_on",
+                              "callback_stub_function", "lifetime", "lifetime_coupled"})
+argument_annotations = frozenset({"depends_on", "value", "implicit_argument", "input", "output", "no_copy", "userdata"})
 
 known_annotations = function_annotations | type_annotations | argument_annotations
 

@@ -626,6 +626,8 @@ class API(Model):
         for f in self.functions:
             f.supported = f.name in funcs
 
+        self.functions.sort(key=lambda f: funclist.index(f.name) if f.name in funclist else -1)
+
     @property
     def nondefault_count(self):
         count = sum(f.nondefault_count for f in self.supported_functions)

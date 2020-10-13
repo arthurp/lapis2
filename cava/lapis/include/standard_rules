@@ -1,3 +1,5 @@
+#define rule library_rule
+
 rule {
     type(pointer(not(transferrable())));
     NOT { type(pointer(pointer(_))); }
@@ -67,3 +69,5 @@ rule priority -1000 {
 } => {
     synchrony(NW_SYNC);
 }
+
+#undef rule
