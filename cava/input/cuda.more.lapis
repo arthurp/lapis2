@@ -1,0 +1,39 @@
+#include <standard_rules>
+#include "cuda.lapis"
+
+rule {
+    function(/.*Async.*/) { p @ }
+} => {
+    at(p) { async; }
+}
+
+rule {
+    argument(dataName @ _) { datap @ type(pointer(_)); }
+    argument(dataLengthName @ /num.*/) { dataLengthp @ type(transferrable()); }
+} => if (```dataLengthName.lower()[:-1] == "num" + dataName.lower()[:-6]```) {
+    at(datap) { buffer(dataLengthName); }
+}
+
+
+rule {
+    argument(size @ /len/) {
+        type(not(pointer(_)));
+    }
+    argument(ptr @ _) { ptrp @
+        type(pointer(char));
+    }
+/*    NOT { // No other argument has a pointer type
+        argument(_) { type(pointer(_)); }
+    }*/
+} => {
+    at(ptrp) {
+        buffer(```min(${size}, strlen(ava_self)+1)```);
+    }
+}
+
+rule {
+    argument(dataName @ _) { datap @ type(pointer(_)); }
+    argument(dataLengthName @ /num.*/) { dataLengthp @ type(pointer(_)); }
+} => if (```dataLengthName.lower() == "num" + dataName.lower()```) {
+    at(datap) { buffer(```*${dataLengthName}```); }
+}

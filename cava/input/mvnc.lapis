@@ -1,0 +1,126 @@
+#include <standard_rules>
+
+// Rules
+
+/// MVNC-specific
+
+rule { type(ncStatus_t); } => {
+    success(NC_OK);
+}
+
+rule {
+    argument(dataName @ _) { p @ type(pointer(transferrable())); }
+    argument(dataLengthName @ /.*Length/) { NOT { type(pointer(_)); } }
+} => if (```dataLengthName == dataName + "Length"```) {
+    at(p) {
+        buffer(dataLengthName);
+    }
+}
+
+rule {
+    argument(dataName @ _) { datap @ type(pointer(transferrable())); }
+    argument(dataLengthName @ /.*Length/) { dataLengthp @ type(pointer(_)); }
+} => if (```dataLengthName == dataName + "Length"```) {
+    at(datap) { buffer(```*${dataLengthName}```); }
+    at(dataLengthp) { buffer(1); input; output; }
+}
+
+rule {
+     function(/.*Create/) {
+         argument(/.*Handle/) { handlep @
+             type(pointer(pointer(_)));
+         }
+     }
+} => {
+    at(handlep) {
+        buffer(1);
+        output;
+        element {
+            allocates;
+        }
+    }
+}
+
+rule priority -100 {
+     function(/.*Allocate.*/) {
+         argument(_) {
+             output;
+             element { handlep @
+                 handle;
+             }
+         }
+     }
+} => {
+    at(handlep) {
+        allocates;
+    }
+}
+
+
+rule {
+     function(/.*Destroy/) {
+         argument(/.*Handle/) { handlep @
+             type(pointer(pointer(_)));
+         }
+     }
+} => {
+    at(handlep) {
+        buffer(1);
+        input;
+        output;
+        element {
+            deallocates;
+        }
+    }
+}
+
+rule {
+    argument(userParam) { type(pointer(void)); }
+} => {
+    argument(userParam) { opaque; }
+}
+
+rule {
+    argument(userParam) { type(pointer(pointer(void))); }
+} => {
+    argument(userParam) {
+        buffer(1);
+        element { opaque; }
+    }
+}
+
+rule {
+    function(/.*SetOption/) { p @ }
+} => {
+    at(p) async;
+}
+
+// Special cases
+
+function(ncFifoReadElem) {
+    argument(outputData) {
+        buffer(```*outputDataLen```);
+    }
+    argument(outputDataLen) {
+        input;
+        output;
+        buffer(1);
+    }
+}
+
+function(ncFifoAllocate) {
+    argument(tensorDesc) {
+        input;
+    }
+}
+
+function(ncGraphQueueInference) {
+    argument(fifoIn) {
+        input;
+        buffer(inFifoCount);
+    }
+    argument(fifoOut) {
+        input;
+        buffer(outFifoCount);
+    }
+}

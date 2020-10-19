@@ -1,0 +1,15 @@
+cuInit
+cuDeviceGet
+cuCtxCreate_v2
+cuModuleLoad
+cuModuleUnload
+cuModuleGetFunction
+cuLaunchKernel
+cuCtxDestroy_v2
+cuMemAlloc_v2
+cuMemcpyHtoD_v2
+cuMemcpyDtoH_v2
+cuCtxSynchronize
+cuDriverGetVersion
+cuMemFree_v2
+cuModuleGetGlobal_v2

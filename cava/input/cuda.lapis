@@ -1,0 +1,96 @@
+#include <standard_rules>
+
+rule {
+    type(CUdevice);
+} => {
+    handle;
+}
+
+rule {
+    type(CUresult);
+} => {
+    success(CUDA_SUCCESS);
+}
+
+rule {
+    argument(size @ /ByteCount|len|count|numbytes/) {
+        type(not(pointer(_)));
+    }
+    argument(ptr @ _) { ptrp @
+        type(pointer(_));
+    }
+/*    NOT { // No other argument has a pointer type
+        argument(_) { type(pointer(_)); }
+    }*/
+} => {
+    at(ptrp) {
+        buffer(size);
+    }
+}
+
+rule priority -100 {
+     function(/.*(Create|Load|Import).*/) {
+         argument(_) {
+             output;
+             element { handlep @
+                 handle;
+             }
+         }
+     }
+} => {
+    at(handlep) {
+        allocates;
+    }
+}
+
+rule {
+     function(/.*(Destroy|Unload).*/) {
+         argument(_) { handlep @
+             handle;
+         }
+     }
+} => {
+    at(handlep) {
+        deallocates;
+    }
+}
+
+rule {
+    argument(dataName @ _) { datap @ type(pointer(_)); }
+    argument(dataLengthName @ /num.*/) { dataLengthp @ type(not(pointer(_))); }
+} => if (```dataLengthName.lower() == "num" + dataName.lower()```) {
+    at(datap) { buffer(dataLengthName); }
+}
+
+rule {
+    function(/cuMemcpy.to[AD].*/) { f @ };
+} => {
+    at(f) {
+        async;
+    }
+}
+
+// Special cases
+
+function(cuModuleLoad) {
+    argument(cubin) {
+        input;
+        buffer(size);
+    }
+}
+
+function(cuModuleUnload) {
+    async;
+}
+
+function(cuLaunchKernel) {
+    async;
+}
+
+function(cuCtxDestroy_v2) {
+    async;
+}
+
+function(cuMemFree_v2) {
+    async;
+}
