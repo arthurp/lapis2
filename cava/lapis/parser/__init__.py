@@ -44,15 +44,18 @@ lapis_metamodel = metamodel_from_str(str(resource_string(__name__, grammar_file_
 include_directory = resource_filename(__name__, "../include")
 
 
-def preprocess_lapis(code):
-    with subprocess.Popen(["cpp", "-nostdinc", "-isystem", include_directory], encoding="utf-8" if hasattr(code, "encode") else None,
+def preprocess_lapis(code, include_path):
+    includes = [s
+                for p in include_path
+                for s in ["-I", p]]
+    with subprocess.Popen(["cpp", "-P", "-nostdinc", "-isystem", include_directory] + includes, encoding="utf-8" if hasattr(code, "encode") else None,
                           stdout=subprocess.PIPE, stdin=subprocess.PIPE) as proc:
         stdout, _ = proc.communicate(code)
         return stdout
 
 
-def parse(fn):
+def parse(fn, include_path):
     with open(fn, mode="rt") as fi:
         raw = fi.read()
-    preprocessed = preprocess_lapis(raw)
+    preprocessed = preprocess_lapis(raw, include_path)
     return lapis_metamodel.model_from_str(preprocessed, file_name=fn)

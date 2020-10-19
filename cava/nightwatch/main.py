@@ -75,7 +75,7 @@ def main():
 
             if args.rulefile:
                 import lapis.parser
-                ruleAST = lapis.parser.parse(args.rulefile)
+                ruleAST = lapis.parser.parse(args.rulefile, include_path=args.include_path or [],)
 
                 from lapis.interpreter.ava import Interpreter
                 interpreter = Interpreter(trace=args.trace)
