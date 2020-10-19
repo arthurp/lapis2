@@ -57,7 +57,7 @@ class _TypeSpelling:
 
     @property
     def contains_buffer(self):
-        return hasattr(self, "buffer") and bool(self.buffer)
+        return hasattr(self, "transfer") and self.transfer == "NW_BUFFER"
 
     # Identifiers
 
