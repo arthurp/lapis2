@@ -105,6 +105,7 @@ cuModuleLoad(CUmodule *module,
 
     ava_argument(module) {
         ava_out; ava_buffer(1);
+        ava_element { ava_allocates; }
     }
     ava_argument(fname) {
         ava_in; ava_buffer(strlen(fname) + 1);
@@ -130,6 +131,10 @@ cuModuleLoad(CUmodule *module,
 CUresult CUDAAPI
 cuModuleUnload(CUmodule hmod) {
     ava_async;
+
+    ava_argument(hmod) {
+        ava_deallocates;
+    }
 }
 
 ava_utility void ava_parse_function_args(const char *name, int *func_argc,

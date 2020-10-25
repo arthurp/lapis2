@@ -122,11 +122,11 @@ ncDeviceDestroy(
 
 ncStatus_t
 ncGraphCreate(
-    const char *ava_name,
+    const char *name,
     struct ncGraphHandle_t **graphHandle)
 {
-    ava_argument(ava_name) {
-        ava_buffer(strlen(ava_name)+1);
+    ava_argument(name) {
+        ava_buffer(strlen(name)+1);
         ava_input;
     }
     ava_argument(graphHandle) {
@@ -161,6 +161,7 @@ ncGraphDestroy(
         ava_buffer(1);
         ava_input;
         ava_output;
+        ava_element { ava_deallocates; }
     }
 }
 
@@ -209,12 +210,10 @@ ncGraphQueueInference(
     ava_argument(fifoIn) {
         ava_buffer(inFifoCount);
         ava_input;
-        ava_output;
     }
     ava_argument(fifoOut) {
         ava_buffer(outFifoCount);
         ava_input;
-        ava_output;
     }
 }
 
@@ -257,10 +256,12 @@ ncGraphAllocateWithFifos(
     ava_argument(inFifoHandle) {
         ava_buffer(1);
         ava_output;
+        ava_element { ava_allocates; }
     }
     ava_argument(outFifoHandle) {
         ava_buffer(1);
         ava_output;
+        ava_element { ava_allocates; }
     }
 }
 
@@ -286,26 +287,29 @@ ncGraphAllocateWithFifosEx(
     ava_argument(inFifoHandle) {
         ava_buffer(1);
         ava_output;
+        ava_element { ava_allocates; }
     }
     ava_argument(outFifoHandle) {
         ava_buffer(1);
         ava_output;
+        ava_element { ava_allocates; }
     }
 }
 
 ncStatus_t
 ncFifoCreate(
-    const char *ava_name,
-    ncFifoType_t ava_type,
+    const char *name,
+    ncFifoType_t type,
     struct ncFifoHandle_t **fifoHandle)
 {
-    ava_argument(ava_name) {
-        ava_buffer(strlen(ava_name)+1);
+    ava_argument(name) {
+        ava_buffer(strlen(name)+1);
         ava_input;
     }
     ava_argument(fifoHandle) {
         ava_buffer(1);
         ava_output;
+        ava_element { ava_allocates; }
     }
 }
 
@@ -345,7 +349,6 @@ ncFifoGetOption(
 {
     ava_argument(data) {
         ava_buffer(*dataLength);
-        ava_input;
         ava_output;
     }
     ava_argument(dataLength) {

@@ -1,12 +1,6 @@
 #include <standard_rules>
 
 rule {
-    type(CUdevice);
-} => {
-    handle;
-}
-
-rule {
     type(CUresult);
 } => {
     success(CUDA_SUCCESS);
@@ -43,6 +37,21 @@ rule priority -100 {
     }
 }
 
+rule priority -100 {
+     function(/.*(Alloc).*/) {
+         argument(_) {
+             output;
+             element { p @
+                 type(CUdeviceptr);
+             }
+         }
+     }
+} => {
+    at(p) {
+        allocates;
+    }
+}
+
 rule {
      function(/.*(Destroy|Unload).*/) {
          argument(_) { handlep @
@@ -51,6 +60,18 @@ rule {
      }
 } => {
     at(handlep) {
+        deallocates;
+    }
+}
+
+rule {
+     function(/.*(Free).*/) {
+         argument(_) { p @
+             type(CUdeviceptr);
+         }
+     }
+} => {
+    at(p) {
         deallocates;
     }
 }

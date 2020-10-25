@@ -27,7 +27,7 @@ rule {
     }*/
 } => {
     at(ptrp) {
-        buffer(```min(${size}, strlen(ava_self)+1)```);
+        buffer(```min(${size}, strlen(${ptr})+1)```);
     }
 }
 
