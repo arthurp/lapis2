@@ -43,6 +43,16 @@ rule {
     buffer(```strlen(ava_self)+1```);
 }
 
+rule {
+    argument(arg @ _) { a@
+        type(pointer(char));
+    }
+} => {
+    at(a) {
+        buffer(```strlen(${arg})+1```);
+    }
+}
+
 rule priority -1000 {
     buffer(b @ _);
 } => if (```b is not None and b != 0```) {
